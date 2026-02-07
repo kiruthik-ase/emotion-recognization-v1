@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emotion Recognition - AI Face Analysis</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">🎭</span>
+                <h1>Emotion Recognition</h1>
+            </div>
+            <p class="subtitle">AI-powered facial expression analysis using YOLO + FER</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Mode Selector -->
+            <div class="mode-selector">
+                <button class="mode-btn active" data-mode="upload">
+                    <span class="icon">📷</span>
+                    Upload Image
+                </button>
+                <button class="mode-btn" data-mode="webcam">
+                    <span class="icon">🎥</span>
+                    Live Webcam
+                </button>
+            </div>
+
+            <!-- Upload Section -->
+            <section id="upload-section" class="section active">
+                <div class="upload-area" id="drop-zone">
+                    <div class="upload-content">
+                        <span class="upload-icon">📁</span>
+                        <h3>Drag & Drop Image Here</h3>
+                        <p>or click to browse</p>
+                        <input type="file" id="file-input" accept="image/*" hidden>
+                    </div>
+                </div>
+
+                <!-- Preview Area -->
+                <div class="preview-container" id="preview-container" style="display: none;">
+                    <div class="image-comparison">
+                        <div class="image-box">
+                            <h4>Original</h4>
+                            <img id="original-image" src="" alt="Original">
+                        </div>
+                        <div class="image-box">
+                            <h4>Analyzed</h4>
+                            <img id="analyzed-image" src="" alt="Analyzed">
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Webcam Section -->
+            <section id="webcam-section" class="section">
+                <div class="webcam-container">
+                    <img id="webcam-feed" src="" alt="Webcam Feed">
+                    <div class="webcam-overlay" id="webcam-overlay">
+                        <span class="play-icon">▶</span>
+                        <p>Click to start webcam</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section" id="results-section" style="display: none;">
+                <h2>
+                    <span class="icon">📊</span>
+                    Detection Results
+                </h2>
+                <div class="results-grid" id="results-grid">
+                    <!-- Results will be inserted here -->
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Built with ❤️ using YOLO Face Detection + FER Emotion Recognition</p>
+            <p class="tech-stack">Python • OpenCV • TensorFlow • Flask</p>
+        </footer>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div>
+        <p>Analyzing emotions...</p>
+    </div>
+
+    <script>
+        // DOM Elements
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const previewContainer = document.getElementById('preview-container');
+        const originalImage = document.getElementById('original-image');
+        const analyzedImage = document.getElementById('analyzed-image');
+        const resultsSection = document.getElementById('results-section');
+        const resultsGrid = document.getElementById('results-grid');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const modeBtns = document.querySelectorAll('.mode-btn');
+        const uploadSection = document.getElementById('upload-section');
+        const webcamSection = document.getElementById('webcam-section');
+        const webcamFeed = document.getElementById('webcam-feed');
+        const webcamOverlay = document.getElementById('webcam-overlay');
+
+        let webcamActive = false;
+
+        // Mode Switching
+        modeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                modeBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                const mode = btn.dataset.mode;
+                
+                if (mode === 'upload') {
+                    uploadSection.classList.add('active');
+                    webcamSection.classList.remove('active');
+                    stopWebcam();
+                } else {
+                    uploadSection.classList.remove('active');
+                    webcamSection.classList.add('active');
+                }
+            });
+        });
+
+        // Webcam Controls
+        webcamOverlay.addEventListener('click', () => {
+            if (!webcamActive) {
+                startWebcam();
+            }
+        });
+
+        function startWebcam() {
+            webcamFeed.src = '/video_feed';
+            webcamOverlay.style.display = 'none';
+            webcamActive = true;
+        }
+
+        function stopWebcam() {
+            webcamFeed.src = '';
+            webcamOverlay.style.display = 'flex';
+            webcamActive = false;
+        }
+
+        // Drag and Drop
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        // File Handler
+        function handleFile(file) {
+            if (!file.type.startsWith('image/')) {
+                alert('Please upload an image file');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                originalImage.src = e.target.result;
+                previewContainer.style.display = 'block';
+                analyzeImage(e.target.result);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Analyze Image
+        async function analyzeImage(imageData) {
+            loadingOverlay.style.display = 'flex';
+            resultsSection.style.display = 'none';
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ image: imageData })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    analyzedImage.src = data.annotated_image;
+                    displayResults(data);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to analyze image');
+            } finally {
+                loadingOverlay.style.display = 'none';
+            }
+        }
+
+        // Display Results
+        function displayResults(data) {
+            resultsSection.style.display = 'block';
+            resultsGrid.innerHTML = '';
+
+            if (data.faces_count === 0) {
+                resultsGrid.innerHTML = `
+                    <div class="no-faces">
+                        <span class="icon">😕</span>
+                        <p>No faces detected in the image</p>
+                    </div>
+                `;
+                return;
+            }
+
+            data.emotions.forEach(face => {
+                const card = document.createElement('div');
+                card.className = 'result-card';
+                
+                // Create emotion bars
+                const emotionBars = Object.entries(face.all_scores)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([emotion, score]) => `
+                        <div class="emotion-bar">
+                            <span class="emotion-label">${emotion}</span>
+                            <div class="bar-container">
+                                <div class="bar-fill ${emotion}" style="width: ${score}%"></div>
+                            </div>
+                            <span class="emotion-score">${score}%</span>
+                        </div>
+                    `).join('');
+
+                card.innerHTML = `
+                    <div class="card-header">
+                        <span class="face-emoji">${face.emoji}</span>
+                        <div class="face-info">
+                            <h3>Face ${face.face_id}</h3>
+                            <p class="dominant-emotion">${face.emotion.toUpperCase()}</p>
+                        </div>
+                        <span class="confidence">${face.confidence}%</span>
+                    </div>
+                    <div class="emotion-breakdown">
+                        ${emotionBars}
+                    </div>
+                `;
+
+                resultsGrid.appendChild(card);
+            });
+        }
+    </script>
+</body>
+</html>
